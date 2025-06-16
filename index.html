@@ -4,181 +4,302 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Employee Spreadsheet to JSON Converter</title>
+    <meta name="description" content="Convert Excel employee spreadsheets to JSON format with custom field mapping and processing">
+    <meta name="keywords" content="excel, json, converter, employee, spreadsheet, data processing">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
+        * {
+            box-sizing: border-box;
+        }
+        
         body {
-            font-family: Arial, sans-serif;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
-            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            margin: 0;
+            padding: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            padding: 40px 20px;
+            color: white;
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .header p {
+            margin: 10px 0 0 0;
+            font-size: 1.1rem;
+            opacity: 0.9;
         }
         
         .container {
-            background: white;
-            border-radius: 8px;
-            padding: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px 40px 20px;
         }
         
-        h1 {
-            color: #333;
-            text-align: center;
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
             margin-bottom: 30px;
         }
         
         .upload-area {
-            border: 2px dashed #ccc;
-            border-radius: 8px;
-            padding: 40px;
+            border: 3px dashed #e1e5e9;
+            border-radius: 12px;
+            padding: 60px 40px;
             text-align: center;
-            margin-bottom: 20px;
-            transition: border-color 0.3s;
+            margin-bottom: 30px;
+            transition: all 0.3s ease;
+            cursor: pointer;
         }
         
         .upload-area:hover {
-            border-color: #007bff;
+            border-color: #667eea;
+            background-color: #f8f9ff;
         }
         
         .upload-area.dragover {
-            border-color: #007bff;
-            background-color: #f8f9fa;
+            border-color: #667eea;
+            background-color: #f0f2ff;
+            transform: scale(1.02);
+        }
+        
+        .upload-icon {
+            font-size: 3rem;
+            color: #667eea;
+            margin-bottom: 20px;
+        }
+        
+        .upload-text {
+            font-size: 1.2rem;
+            color: #495057;
+            margin-bottom: 20px;
         }
         
         input[type="file"] {
             display: none;
         }
         
-        .upload-btn {
-            background-color: #007bff;
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
-            padding: 10px 20px;
+            padding: 12px 30px;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
             font-size: 16px;
-            margin: 10px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
         }
         
-        .upload-btn:hover {
-            background-color: #0056b3;
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
         
-        .process-btn {
-            background-color: #28a745;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 20px 0;
-            display: none;
-        }
-        
-        .process-btn:hover {
-            background-color: #218838;
-        }
-        
-        .process-btn:disabled {
-            background-color: #6c757d;
+        .btn:disabled {
+            background: #6c757d;
             cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
         }
         
-        .download-btn {
-            background-color: #17a2b8;
-            color: white;
-            padding: 12px 24px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            margin: 20px 0;
+        .btn-success {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+        }
+        
+        .btn-success:hover {
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.4);
+        }
+        
+        .btn-info {
+            background: linear-gradient(135deg, #17a2b8 0%, #6f42c1 100%);
+        }
+        
+        .btn-info:hover {
+            box-shadow: 0 5px 15px rgba(23, 162, 184, 0.4);
+        }
+        
+        .process-btn, .download-btn {
             display: none;
-        }
-        
-        .download-btn:hover {
-            background-color: #138496;
+            margin: 20px 10px 20px 0;
         }
         
         .status {
             margin: 20px 0;
-            padding: 15px;
-            border-radius: 4px;
+            padding: 20px;
+            border-radius: 8px;
             display: none;
+            font-weight: 500;
         }
         
         .status.success {
-            background-color: #d4edda;
+            background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
             border: 1px solid #c3e6cb;
             color: #155724;
         }
         
         .status.error {
-            background-color: #f8d7da;
+            background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
             border: 1px solid #f5c6cb;
             color: #721c24;
         }
         
         .status.info {
-            background-color: #d1ecf1;
+            background: linear-gradient(135deg, #d1ecf1 0%, #bee5eb 100%);
             border: 1px solid #bee5eb;
             color: #0c5460;
         }
         
+        .file-info {
+            background: linear-gradient(135deg, #e9ecef 0%, #f8f9fa 100%);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+            border-left: 4px solid #667eea;
+        }
+        
+        .file-info h3 {
+            margin: 0 0 10px 0;
+            color: #495057;
+        }
+        
         .preview {
-            margin-top: 20px;
-            max-height: 400px;
+            margin-top: 30px;
+            max-height: 500px;
             overflow-y: auto;
-            background-color: #f8f9fa;
+            background: #f8f9fa;
             border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 15px;
+            border-radius: 8px;
+            padding: 20px;
+            display: none;
+        }
+        
+        .preview h3 {
+            margin: 0 0 15px 0;
+            color: #495057;
         }
         
         pre {
             margin: 0;
             white-space: pre-wrap;
             word-wrap: break-word;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.4;
         }
         
-        .file-info {
-            background-color: #e9ecef;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-            display: none;
+        .specs {
+            background: #f8f9fa;
+            padding: 30px;
+            border-radius: 8px;
+            margin-top: 30px;
+        }
+        
+        .specs h2 {
+            color: #495057;
+            margin-bottom: 20px;
+        }
+        
+        .specs ul {
+            margin: 0;
+            padding-left: 20px;
+        }
+        
+        .specs li {
+            margin-bottom: 8px;
+            color: #6c757d;
+        }
+        
+        .footer {
+            text-align: center;
+            padding: 40px 20px;
+            color: rgba(255,255,255,0.8);
+            font-size: 0.9rem;
+        }
+        
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .card {
+                padding: 20px;
+            }
+            
+            .upload-area {
+                padding: 40px 20px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="header">
         <h1>Employee Spreadsheet to JSON Converter</h1>
-        
-        <div class="upload-area" id="uploadArea">
-            <p>Drop your Excel file here or click to select</p>
-            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
-                Select Excel File
+        <p>Convert Excel employee data to structured JSON format</p>
+    </div>
+    
+    <div class="container">
+        <div class="card">
+            <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📊</div>
+                <div class="upload-text">Drop your Excel file here or click to select</div>
+                <button class="btn" type="button">
+                    Choose Excel File
+                </button>
+                <input type="file" id="fileInput" accept=".xls,.xlsx" />
+            </div>
+            
+            <div class="file-info" id="fileInfo">
+                <h3>File Information</h3>
+                <div id="fileDetails"></div>
+            </div>
+            
+            <button class="btn btn-success process-btn" id="processBtn" onclick="processFile()">
+                🔄 Convert to JSON
             </button>
-            <input type="file" id="fileInput" accept=".xls,.xlsx" />
+            
+            <div class="status" id="status"></div>
+            
+            <button class="btn btn-info download-btn" id="downloadBtn" onclick="downloadResult()">
+                💾 Download JSON File
+            </button>
+            
+            <div class="preview" id="preview">
+                <h3>JSON Preview</h3>
+                <pre id="jsonPreview"></pre>
+            </div>
         </div>
         
-        <div class="file-info" id="fileInfo"></div>
-        
-        <button class="process-btn" id="processBtn" onclick="processFile()">
-            Convert to JSON
-        </button>
-        
-        <div class="status" id="status"></div>
-        
-        <button class="download-btn" id="downloadBtn" onclick="downloadResult()">
-            Download JSON File
-        </button>
-        
-        <div class="preview" id="preview" style="display: none;">
-            <h3>JSON Preview:</h3>
-            <pre id="jsonPreview"></pre>
+        <div class="card specs">
+            <h2>📋 Processing Specifications</h2>
+            <ul>
+                <li><strong>Store ID:</strong> Takes last 6 characters, removes "/", pads with leading "0"</li>
+                <li><strong>Job Codes:</strong> RGM → "15008", Shift Supervisor → "9051", Assistant Manager → "9902", Others → "9011"</li>
+                <li><strong>Time Card ID:</strong> Last 4 digits of User ID</li>
+                <li><strong>Names:</strong> Converted to uppercase</li>
+                <li><strong>Required Columns:</strong> USERID, FIRSTNAME, LASTNAME, STOREID, JOBROLE</li>
+                <li><strong>Output Format:</strong> JSON with store, date, created timestamp, and employees array</li>
+            </ul>
         </div>
+    </div>
+    
+    <div class="footer">
+        <p>Built for efficient employee data processing • Compatible with .xls and .xlsx files</p>
     </div>
 
     <script>
@@ -240,6 +361,7 @@
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
+        const fileDetails = document.getElementById('fileDetails');
         const processBtn = document.getElementById('processBtn');
         const status = document.getElementById('status');
         const downloadBtn = document.getElementById('downloadBtn');
@@ -251,7 +373,8 @@
             uploadArea.classList.add('dragover');
         });
 
-        uploadArea.addEventListener('dragleave', () => {
+        uploadArea.addEventListener('dragleave', (e) => {
+            e.preventDefault();
             uploadArea.classList.remove('dragover');
         });
 
@@ -277,17 +400,18 @@
             }
 
             fileInfo.style.display = 'block';
-            fileInfo.innerHTML = `
-                <strong>Selected File:</strong> ${file.name}<br>
-                <strong>Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
-                <strong>Type:</strong> ${file.type || 'Excel file'}
+            fileDetails.innerHTML = `
+                <strong>📄 File Name:</strong> ${file.name}<br>
+                <strong>📏 Size:</strong> ${(file.size / 1024).toFixed(2)} KB<br>
+                <strong>📅 Last Modified:</strong> ${new Date(file.lastModified).toLocaleString()}<br>
+                <strong>🔧 Type:</strong> ${file.type || 'Excel file'}
             `;
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 fileData = e.target.result;
                 processBtn.style.display = 'inline-block';
-                showStatus('File loaded successfully. Click "Convert to JSON" to process.', 'info');
+                showStatus('✅ File loaded successfully. Click "Convert to JSON" to process.', 'info');
             };
             reader.readAsArrayBuffer(file);
         }
@@ -299,7 +423,7 @@
             }
 
             try {
-                showStatus('Processing file...', 'info');
+                showStatus('⚡ Processing file...', 'info');
                 processBtn.disabled = true;
 
                 // Read the Excel file
@@ -381,7 +505,7 @@
                 };
 
                 // Show success and preview
-                showStatus(`Processing complete! Converted ${employees.length} employees. Store ID: ${storeValue}`, 'success');
+                showStatus(`🎉 Processing complete! Converted ${employees.length} employees. Store ID: ${storeValue}`, 'success');
                 downloadBtn.style.display = 'inline-block';
                 
                 // Show preview
@@ -389,7 +513,7 @@
                 jsonPreview.textContent = JSON.stringify(processedResult, null, 2);
 
             } catch (error) {
-                showStatus(`Error processing file: ${error.message}`, 'error');
+                showStatus(`❌ Error processing file: ${error.message}`, 'error');
             } finally {
                 processBtn.disabled = false;
             }
@@ -413,7 +537,7 @@
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showStatus('JSON file downloaded successfully!', 'success');
+            showStatus('💾 JSON file downloaded successfully!', 'success');
         }
 
         function showStatus(message, type) {
@@ -424,9 +548,12 @@
             if (type === 'success') {
                 setTimeout(() => {
                     status.style.display = 'none';
-                }, 5000);
+                }, 7000);
             }
         }
+    </script>
+</body>
+</html>
     </script>
 </body>
 </html>
