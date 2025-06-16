@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Labor Schedule Processor - GMT Fixed Version</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .upload-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .upload-box {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            transition: border-color 0.3s;
+        }
+        .upload-box:hover {
+            border-color: #007bff;
+        }
+        .upload-box.dragover {
+            border-color: #007bff;
+            background-color: #f0f8ff;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 6px;
+            font-weight: bold;
+        }
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .status.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .output-section {
+            margin-top: 30px;
+        }
+        .json-output {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            max-height: 600px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            font-size: 12px;
+        }
+        .file-info {
+            background-color: #e9ecef;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        .timezone-note {
+            background-color: #fff3cd;
+            color: #856404;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Labor Schedule Processor - GMT Fixed Version</h1>
+        
+        <div class="upload-section">
+            <div class="upload-box" id="employeeUpload">
+                <h3>Employee JSON File</h3>
+                <p>Upload your employee JSON file containing names, job codes, and UUIDs</p>
+                <input type="file" id="employeeFile" accept=".json" />
+                <div class="file-info" id="employeeInfo" style="display: none;"></div>
+            </div>
+            
+            <div class="upload-box" id="scheduleUpload">
+                <h3>Labor Schedule Spreadsheet</h3>
+                <p>Upload your Excel file with daily start/end times</p>
+                <input type="file" id="scheduleFile" accept=".xlsx,.xls" />
+                <div class="file-info" id="scheduleInfo" style="display: none;"></div>
+            </div>
+        </div>
+
+        <div class="controls">
+            <button id="processBtn" onclick="processFiles()" disabled>Process Files</button>
+            <button id="loadSampleBtn" onclick="loadSampleData()">Load Sample Data</button>
+            <button id="clearBtn" onclick="clearAll()">Clear All</button>
+        </div>
+
+        <div id="status" class="status" style="display: none;"></div>
+
+        <div class="output-section">
+            <h3>Generated JSON Output:</h3>
+            <div class="timezone-note">
+                <strong>🕐 GMT Timezone:</strong> All "in" and "out" times are converted to GMT timezone (UTC+0) as ISO 8601 strings (e.g., 2025-06-15T08:30:00.000Z)
+            </div>
+            <div class="json-output" id="jsonOutput">No output yet. Upload files and click "Process Files" to see results.</div>
+            <div class="controls" id="downloadSection" style="display: none;">
+                <button id="downloadBtn" onclick="downloadJSON()">Download JSON File</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let employeeData = null;
+        let scheduleData = null;
+        let processedOutput = null;
+
+        class LaborScheduleProcessor {
+            constructor() {
+                this.employees = [];
+                this.scheduleData = {};
+                this.store = '';
+                this.scheduleDate = '';
+            }
+
+            loadEmployeeData(data, fileName) {
+                try {
+                    // Handle the actual JSON structure from the sample file
+                    if (data.employees) {
+                        this.employees = data.employees;
+                        this.store = data.store;
+                    } else {
+                        this.employees = data;
+                        // Extract store number from filename (last 6 digits)
+                        const storeMatch = fileName.match(/(\d{6})/);
+                        if (storeMatch) {
+                            this.store = storeMatch[1];
+                        } else {
+                            this.store = '999999';
+                        }
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error processing employee data:', error);
+                    return false;
+                }
+            }
+
+            loadScheduleData(workbook) {
+                try {
+                    // For the simpler format, look for date-named sheets first
+                    let targetSheet = null;
+                    
+                    // Find sheets that match date patterns (like "22.06.25")
+                    const dateSheets = workbook.SheetNames.filter(name => name.match(/\d{2}\.\d{2}\.\d{2}/));
+                    
+                    if (dateSheets.length > 0) {
+                        targetSheet = dateSheets[0];
+                    } else {
+                        targetSheet = workbook.SheetNames[0];
+                    }
+                    
+                    console.log(`Using sheet: ${targetSheet}`);
+                    
+                    const worksheet = workbook.Sheets[targetSheet];
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+                    
+                    // Extract dates from row 0
+                    const dateRow = jsonData[0];
+                    const allDates = [];
+                    
+                    // First, extract all available dates from the Excel file
+                    for (let i = 0; i < dateRow.length; i++) {
+                        if (dateRow[i] && typeof dateRow[i] === 'number' && dateRow[i] > 40000) {
+                            const date = new Date((dateRow[i] - 25569) * 86400 * 1000);
+                            allDates.push({
+                                column: i,
+                                date: date,
+                                dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()],
+                                dateString: this.formatDateYYYYMMDD(date)
+                            });
+                        }
+                    }
+                    
+                    // Find Wednesday to use as the schedule date
+                    const wednesday = allDates.find(d => d.dayName === 'Wednesday');
+                    let scheduleDate;
+                    
+                    if (wednesday) {
+                        scheduleDate = wednesday.dateString;
+                        
+                        // Now find Monday (2 days before Wednesday) to start the schedule
+                        const mondayDate = new Date(wednesday.date);
+                        mondayDate.setDate(wednesday.date.getDate() - 2);
+                        
+                        // Filter dates to only include Monday through the end of the week
+                        const dates = allDates.filter(d => d.date >= mondayDate);
+                        
+                        this.scheduleDate = scheduleDate;
+                        this.scheduleData = this.parseScheduleData(jsonData, dates);
+                    } else {
+                        // Fallback: use all dates and set schedule date as first date + 2
+                        if (allDates.length > 0) {
+                            const firstDate = allDates[0].date;
+                            const targetDate = new Date(firstDate);
+                            targetDate.setDate(firstDate.getDate() + 2);
+                            scheduleDate = this.formatDateYYYYMMDD(targetDate);
+                        } else {
+                            scheduleDate = this.formatDateYYYYMMDD(new Date());
+                        }
+                        
+                        this.scheduleDate = scheduleDate;
+                        this.scheduleData = this.parseScheduleData(jsonData, allDates);
+                    }
+                    
+                    return true;
+                } catch (error) {
+                    console.error('Error processing schedule data:', error);
+                    return false;
+                }
+            }
+
+            parseScheduleData(rawData, dates) {
+                const scheduleData = {
+                    dates: dates,
+                    shifts: []
+                };
+
+                if (rawData.length < 4) return scheduleData;
+
+                console.log(`Processing ${rawData.length - 3} potential employees...`);
+
+                // Parse employee schedules starting from row 3
+                for (let row = 3; row < rawData.length; row++) {
+                    const rowData = rawData[row];
+                    if (!rowData[0] || !rowData[0].toString().trim()) continue;
+                    
+                    const employeeName = rowData[0].toString().trim();
+                    const employee = this.findEmployeeByName(employeeName);
+                    
+                    if (!employee) {
+                        console.warn(`Employee not found in JSON: ${employeeName}`);
+                        continue;
+                    }
+
+                    console.log(`Processing ${employeeName}...`);
+
+                    // Parse shifts for each day
+                    dates.forEach((dateInfo, dayIndex) => {
+                        const startCol = 1 + (dayIndex * 3);
+                        const finishCol = startCol + 1;
+                        
+                        if (startCol < rowData.length && finishCol < rowData.length) {
+                            const startTime = this.decimalToTime(rowData[startCol]);
+                            const finishTime = this.decimalToTime(rowData[finishCol]);
+                            
+                            if (startTime && finishTime) {
+                                scheduleData.shifts.push({
+                                    employee: employee,
+                                    date: dateInfo.dateString,
+                                    startTime: startTime,
+                                    endTime: finishTime
+                                });
+                                
+                                console.log(`  ${dateInfo.dayName}: ${startTime.hour}:${startTime.minute.toString().padStart(2,'0')} - ${finishTime.hour}:${finishTime.minute.toString().padStart(2,'0')}`);
+                            }
+                        }
+                    });
+                }
+
+                console.log(`Total shifts processed: ${scheduleData.shifts.length}`);
+                return scheduleData;
+            }
+
+            // Convert Excel decimal time to time object
+            decimalToTime(decimal) {
+                if (!decimal || decimal === 0) return null;
+                const hours = Math.floor(decimal * 24);
+                const minutes = Math.round((decimal * 24 - hours) * 60);
+                return { hour: hours, minute: minutes };
+            }
+
+            // Convert time to GMT datetime string
+            timeToGMT(date, time) {
+                const year = parseInt(date.substring(0, 4));
+                const month = parseInt(date.substring(4, 6)) - 1;
+                const day = parseInt(date.substring(6, 8));
+                
+                // Create UTC date directly (which is GMT)
+                const gmtDate = new Date(Date.UTC(year, month, day, time.hour, time.minute, 0, 0));
+                return gmtDate.toISOString();
+            }
+
+            findEmployeeByName(name) {
+                const nameParts = name.split(/\s+/);
+                if (nameParts.length < 2) return null;
+                
+                const firstName = nameParts[0].toLowerCase();
+                const lastName = nameParts[nameParts.length - 1].toLowerCase();
+                
+                // First try exact match
+                let employee = this.employees.find(emp => 
+                    emp.firstName && emp.lastName &&
+                    emp.firstName.toLowerCase() === firstName &&
+                    emp.lastName.toLowerCase() === lastName
+                );
+                
+                // If not found, try reversed (last name first)
+                if (!employee && nameParts.length >= 2) {
+                    const firstNameAlt = nameParts[nameParts.length - 1].toLowerCase();
+                    const lastNameAlt = nameParts[0].toLowerCase();
+                    
+                    employee = this.employees.find(emp => 
+                        emp.firstName && emp.lastName &&
+                        emp.firstName.toLowerCase() === firstNameAlt &&
+                        emp.lastName.toLowerCase() === lastNameAlt
+                    );
+                }
+                
+                // If still not found, try partial matching
+                if (!employee) {
+                    employee = this.employees.find(emp => 
+                        emp.firstName && emp.lastName &&
+                        (emp.firstName.toLowerCase().includes(firstName) || firstName.includes(emp.firstName.toLowerCase())) &&
+                        (emp.lastName.toLowerCase().includes(lastName) || lastName.includes(emp.lastName.toLowerCase()))
+                    );
+                }
+                
+                return employee;
+            }
+
+            generateOutput() {
+                const output = {
+                    store: this.store,
+                    date: this.scheduleDate,
+                    created: new Date().toISOString(),
+                    labor: {
+                        type: "WEEKLY",
+                        schedules: []
+                    },
+                    employees: []
+                };
+
+                // Generate labor schedules
+                this.scheduleData.shifts.forEach(shift => {
+                    const employee = shift.employee;
+                    const jobCode = employee.job ? employee.job.jobCode : employee.jobCode;
+                    const breakType = parseInt(jobCode) === 15008 ? "N" : "Y";
+                    const startGMT = this.timeToGMT(shift.date, shift.startTime);
+                    const endGMT = this.timeToGMT(shift.date, shift.endTime);
+                    const hours = this.calculateHours(startGMT, endGMT, breakType === "Y");
+                    const shiftNumber = shift.startTime.hour < 12 ? 1 : 2;
+
+                    output.labor.schedules.push({
+                        breakType: breakType,
+                        in: startGMT,
+                        out: endGMT,
+                        borrowed: false,
+                        date: shift.date,
+                        hours: hours,
+                        employeeId: employee.id,
+                        jobCode: jobCode.toString(),
+                        jobTitle: this.getJobTitle(parseInt(jobCode)),
+                        shiftNumber: shiftNumber
+                    });
+                });
+
+                // Generate employee list
+                const employeesWithShifts = new Set();
+                this.scheduleData.shifts.forEach(shift => {
+                    employeesWithShifts.add(shift.employee.id);
+                });
+
+                this.employees.forEach(employee => {
+                    if (employeesWithShifts.has(employee.id)) {
+                        output.employees.push({
+                            id: employee.id,
+                            lastName: employee.lastName,
+                            firstName: employee.firstName,
+                            timeCardId: employee.timeCardId
+                        });
+                    }
+                });
+
+                return output;
+            }
+
+            calculateHours(startTime, endTime, hasBreak) {
+                const start = new Date(startTime);
+                const end = new Date(endTime);
+                let hours = (end - start) / (1000 * 60 * 60);
+                
+                if (hasBreak) {
+                    hours -= 0.5;
+                }
+                
+                return Math.round(hours * 100) / 100;
+            }
+
+            getJobTitle(jobCode) {
+                switch (parseInt(jobCode)) {
+                    case 15008: return 'RGM';
+                    case 9051: return 'SL';
+                    case 9902: return 'AM';
+                    case 9011: return 'FC';
+                    default: return 'FC';
+                }
+            }
+
+            formatDateYYYYMMDD(date) {
+                const year = date.getFullYear();
+                const month = String(date.getMonth() + 1).padStart(2, '0');
+                const day = String(date.getDate()).padStart(2, '0');
+                return `${year}${month}${day}`;
+            }
+        }
+
+        // File upload handlers
+        document.getElementById('employeeFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const jsonData = JSON.parse(e.target.result);
+                        employeeData = {
+                            data: jsonData,
+                            fileName: file.name
+                        };
+                        
+                        const empCount = jsonData.employees ? jsonData.employees.length : jsonData.length;
+                        document.getElementById('employeeInfo').innerHTML = `✓ Loaded: ${file.name} (${empCount} employees)`;
+                        document.getElementById('employeeInfo').style.display = 'block';
+                        checkProcessReady();
+                    } catch (error) {
+                        showStatus('Error parsing employee JSON file: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+        });
+
+        document.getElementById('scheduleFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    try {
+                        const data = new Uint8Array(e.target.result);
+                        const workbook = XLSX.read(data, { type: 'array' });
+                        scheduleData = {
+                            workbook: workbook,
+                            fileName: file.name
+                        };
+                        document.getElementById('scheduleInfo').innerHTML = `✓ Loaded: ${file.name}`;
+                        document.getElementById('scheduleInfo').style.display = 'block';
+                        checkProcessReady();
+                    } catch (error) {
+                        showStatus('Error parsing schedule file: ' + error.message, 'error');
+                    }
+                };
+                reader.readAsArrayBuffer(file);
+            }
+        });
+
+        function checkProcessReady() {
+            const processBtn = document.getElementById('processBtn');
+            if (employeeData && scheduleData) {
+                processBtn.disabled = false;
+            }
+        }
+
+        function loadSampleData() {
+            showStatus('Loading sample data...', 'info');
+            
+            try {
+                if (window.fs) {
+                    window.fs.readFile('employees_active_filtered_093004.json', { encoding: 'utf8' })
+                        .then(data => {
+                            employeeData = {
+                                data: JSON.parse(data),
+                                fileName: 'employees_active_filtered_093004.json'
+                            };
+                            document.getElementById('employeeInfo').innerHTML = `✓ Loaded sample: employees_active_filtered_093004.json (${employeeData.data.employees.length} employees)`;
+                            document.getElementById('employeeInfo').style.display = 'block';
+                            
+                            return window.fs.readFile('Labour Sheet  Woking  062225.xlsx');
+                        })
+                        .then(data => {
+                            const workbook = XLSX.read(data, { type: 'array' });
+                            scheduleData = {
+                                workbook: workbook,
+                                fileName: 'Labour Sheet  Woking  062225.xlsx'
+                            };
+                            document.getElementById('scheduleInfo').innerHTML = `✓ Loaded sample: Labour Sheet  Woking  062225.xlsx`;
+                            document.getElementById('scheduleInfo').style.display = 'block';
+                            
+                            checkProcessReady();
+                            showStatus('✅ Sample data loaded successfully! Click "Process Files" to test.', 'success');
+                        })
+                        .catch(error => {
+                            showStatus('Sample files not found. Please upload your own files.', 'error');
+                        });
+                } else {
+                    showStatus('File system not available. Please upload files manually.', 'error');
+                }
+            } catch (error) {
+                showStatus('Error loading sample data: ' + error.message, 'error');
+            }
+        }
+
+        function processFiles() {
+            if (!employeeData || !scheduleData) {
+                showStatus('Please upload both files before processing.', 'error');
+                return;
+            }
+
+            showStatus('Processing files...', 'info');
+
+            const processor = new LaborScheduleProcessor();
+            
+            try {
+                // Load employee data
+                if (!processor.loadEmployeeData(employeeData.data, employeeData.fileName)) {
+                    throw new Error('Failed to process employee data');
+                }
+
+                // Load schedule data
+                if (!processor.loadScheduleData(scheduleData.workbook)) {
+                    throw new Error('Failed to process schedule data');
+                }
+
+                // Generate output
+                processedOutput = processor.generateOutput();
+                
+                // Display result
+                document.getElementById('jsonOutput').textContent = JSON.stringify(processedOutput, null, 2);
+                document.getElementById('downloadSection').style.display = 'block';
+                
+                showStatus(`✅ Successfully processed ${processedOutput.labor.schedules.length} labor entries for ${processedOutput.employees.length} employees. All times converted to GMT timezone.`, 'success');
+                
+            } catch (error) {
+                showStatus('Processing failed: ' + error.message, 'error');
+                console.error('Processing error:', error);
+            }
+        }
+
+        function downloadJSON() {
+            if (!processedOutput) {
+                showStatus('No output to download. Process files first.', 'error');
+                return;
+            }
+
+            const fileName = `laborschedule_filtered_${processedOutput.store}_${processedOutput.date}.json`;
+            const blob = new Blob([JSON.stringify(processedOutput, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            showStatus(`Downloaded: ${fileName}`, 'success');
+        }
+
+        function clearAll() {
+            employeeData = null;
+            scheduleData = null;
+            processedOutput = null;
+            
+            document.getElementById('employeeFile').value = '';
+            document.getElementById('scheduleFile').value = '';
+            document.getElementById('employeeInfo').style.display = 'none';
+            document.getElementById('scheduleInfo').style.display = 'none';
+            document.getElementById('processBtn').disabled = true;
+            document.getElementById('jsonOutput').textContent = 'No output yet. Upload files and click "Process Files" to see results.';
+            document.getElementById('downloadSection').style.display = 'none';
+            document.getElementById('status').style.display = 'none';
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            statusDiv.style.display = 'block';
+        }
+    </script>
+</body>
+</html>
