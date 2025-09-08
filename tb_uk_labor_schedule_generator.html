@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Labor Schedule Processor - GMT Fixed Version</title>
+    <title>Labor Schedule Processor - Final Version</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <style>
         body {
@@ -110,19 +110,38 @@
             text-align: center;
             margin: 20px 0;
         }
-        .timezone-note {
-            background-color: #fff3cd;
-            color: #856404;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 10px 0;
-            border: 1px solid #ffeaa7;
+        .features-note {
+            background-color: #e7f3ff;
+            color: #0c5460;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            border: 1px solid #bee5eb;
+        }
+        .features-note h4 {
+            margin-top: 0;
+            color: #0c5460;
+        }
+        .features-list {
+            margin: 5px 0;
+            padding-left: 20px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>Labor Schedule Processor - GMT Fixed Version</h1>
+        <h1>Labor Schedule Processor - Final Version</h1>
+        
+        <div class="features-note">
+            <h4>🎯 Latest Features:</h4>
+            <ul class="features-list">
+                <li><strong>GMT Timezone:</strong> All times converted to GMT (UTC+0)</li>
+                <li><strong>7-Day Schedule:</strong> Includes all days Monday through Sunday</li>
+                <li><strong>Date Correction:</strong> Fixed offset to start from correct Monday date</li>
+                <li><strong>Boolean Fields:</strong> 'borrowed' field uses boolean false</li>
+                <li><strong>String Job Codes:</strong> Job codes stored as strings</li>
+            </ul>
+        </div>
         
         <div class="upload-section">
             <div class="upload-box" id="employeeUpload">
@@ -150,9 +169,6 @@
 
         <div class="output-section">
             <h3>Generated JSON Output:</h3>
-            <div class="timezone-note">
-                <strong>🕐 GMT Timezone:</strong> All "in" and "out" times are converted to GMT timezone (UTC+0) as ISO 8601 strings (e.g., 2025-06-15T08:30:00.000Z)
-            </div>
             <div class="json-output" id="jsonOutput">No output yet. Upload files and click "Process Files" to see results.</div>
             <div class="controls" id="downloadSection" style="display: none;">
                 <button id="downloadBtn" onclick="downloadJSON()">Download JSON File</button>
@@ -202,7 +218,7 @@
                     // For the simpler format, look for date-named sheets first
                     let targetSheet = null;
                     
-                    // Find sheets that match date patterns (like "22.06.25")
+                    // Find sheets that match date patterns (like "22.06.25" or "24.08.25")
                     const dateSheets = workbook.SheetNames.filter(name => name.match(/\d{2}\.\d{2}\.\d{2}/));
                     
                     if (dateSheets.length > 0) {
@@ -216,19 +232,25 @@
                     const worksheet = workbook.Sheets[targetSheet];
                     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
                     
-                    // Extract dates from row 0
+                    // Extract dates from row 0 and adjust them to match the intended schedule
                     const dateRow = jsonData[0];
                     const allDates = [];
                     
                     // First, extract all available dates from the Excel file
                     for (let i = 0; i < dateRow.length; i++) {
                         if (dateRow[i] && typeof dateRow[i] === 'number' && dateRow[i] > 40000) {
-                            const date = new Date((dateRow[i] - 25569) * 86400 * 1000);
+                            const excelDate = new Date((dateRow[i] - 25569) * 86400 * 1000);
+                            
+                            // Adjust the date by adding 1 day to match the intended schedule
+                            // This corrects for the Excel date offset
+                            const correctedDate = new Date(excelDate);
+                            correctedDate.setDate(excelDate.getDate() + 1);
+                            
                             allDates.push({
                                 column: i,
-                                date: date,
-                                dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][date.getDay()],
-                                dateString: this.formatDateYYYYMMDD(date)
+                                date: correctedDate,
+                                dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][correctedDate.getDay()],
+                                dateString: this.formatDateYYYYMMDD(correctedDate)
                             });
                         }
                     }
@@ -239,16 +261,11 @@
                     
                     if (wednesday) {
                         scheduleDate = wednesday.dateString;
-                        
-                        // Now find Monday (2 days before Wednesday) to start the schedule
-                        const mondayDate = new Date(wednesday.date);
-                        mondayDate.setDate(wednesday.date.getDate() - 2);
-                        
-                        // Filter dates to only include Monday through the end of the week
-                        const dates = allDates.filter(d => d.date >= mondayDate);
-                        
                         this.scheduleDate = scheduleDate;
-                        this.scheduleData = this.parseScheduleData(jsonData, dates);
+                        
+                        // Include ALL 7 days from the Excel file
+                        // The schedule runs Monday to Sunday (7 days total)
+                        this.scheduleData = this.parseScheduleData(jsonData, allDates);
                     } else {
                         // Fallback: use all dates and set schedule date as first date + 2
                         if (allDates.length > 0) {
@@ -535,15 +552,15 @@
                             document.getElementById('employeeInfo').innerHTML = `✓ Loaded sample: employees_active_filtered_093004.json (${employeeData.data.employees.length} employees)`;
                             document.getElementById('employeeInfo').style.display = 'block';
                             
-                            return window.fs.readFile('Labour Sheet  Woking  062225.xlsx');
+                            return window.fs.readFile('Labour Sheet  Ashton Moss 091425.xlsx');
                         })
                         .then(data => {
                             const workbook = XLSX.read(data, { type: 'array' });
                             scheduleData = {
                                 workbook: workbook,
-                                fileName: 'Labour Sheet  Woking  062225.xlsx'
+                                fileName: 'Labour Sheet  Ashton Moss 091425.xlsx'
                             };
-                            document.getElementById('scheduleInfo').innerHTML = `✓ Loaded sample: Labour Sheet  Woking  062225.xlsx`;
+                            document.getElementById('scheduleInfo').innerHTML = `✓ Loaded sample: Labour Sheet  Ashton Moss 091425.xlsx`;
                             document.getElementById('scheduleInfo').style.display = 'block';
                             
                             checkProcessReady();
@@ -588,7 +605,10 @@
                 document.getElementById('jsonOutput').textContent = JSON.stringify(processedOutput, null, 2);
                 document.getElementById('downloadSection').style.display = 'block';
                 
-                showStatus(`✅ Successfully processed ${processedOutput.labor.schedules.length} labor entries for ${processedOutput.employees.length} employees. All times converted to GMT timezone.`, 'success');
+                // Count unique days in the output
+                const uniqueDays = new Set(processedOutput.labor.schedules.map(s => s.date));
+                
+                showStatus(`✅ Successfully processed ${processedOutput.labor.schedules.length} labor entries across ${uniqueDays.size} days for ${processedOutput.employees.length} employees. All times in GMT timezone.`, 'success');
                 
             } catch (error) {
                 showStatus('Processing failed: ' + error.message, 'error');
