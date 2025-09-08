@@ -529,15 +529,19 @@
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             
+            // Create filename with store value
+            const storeValue = processedResult.store || '000000';
+            const filename = `employees_active_filtered_${storeValue}.json`;
+            
             const a = document.createElement('a');
             a.href = url;
-            a.download = 'employee_output.json';
+            a.download = filename;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
 
-            showStatus('💾 JSON file downloaded successfully!', 'success');
+            showStatus(`💾 JSON file downloaded as: ${filename}`, 'success');
         }
 
         function showStatus(message, type) {
