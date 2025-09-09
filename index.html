@@ -289,7 +289,17 @@
             <h2>📋 Processing Specifications</h2>
             <ul>
                 <li><strong>Store ID:</strong> Takes last 6 characters, removes "/", pads with leading "0"</li>
-                <li><strong>Job Codes:</strong> RGM → "15008", Shift Supervisor → "9051", Assistant Manager → "9902", Others → "9011"</li>
+                <li><strong>Job Codes:</strong> 
+                    <ul style="margin-top: 8px;">
+                        <li>RGM → "15008"</li>
+                        <li>Shift Supervisor → "9051"</li>
+                        <li>Assistant Manager → "9902"</li>
+                        <li>Team Trainer → "9014"</li>
+                        <li>Shift Supervisor Trainee → "9053"</li>
+                        <li>Assistant Manager Trainee → "9060"</li>
+                        <li>All Others → "9011"</li>
+                    </ul>
+                </li>
                 <li><strong>Time Card ID:</strong> Last 4 digits of User ID</li>
                 <li><strong>Names:</strong> Converted to uppercase</li>
                 <li><strong>Required Columns:</strong> USERID, FIRSTNAME, LASTNAME, STOREID, JOBROLE</li>
@@ -555,9 +565,6 @@
                 }, 7000);
             }
         }
-    </script>
-</body>
-</html>
     </script>
 </body>
 </html>
