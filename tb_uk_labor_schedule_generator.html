@@ -323,14 +323,17 @@
                             const finishTime = this.decimalToTime(rowData[finishCol]);
                             
                             if (startTime && finishTime) {
+                                // Adjust finish time if shift crosses midnight
+                                const adjustedFinishTime = this.adjustForMidnightCrossing(startTime, finishTime);
+                                
                                 scheduleData.shifts.push({
                                     employee: employee,
                                     date: dateInfo.dateString,
                                     startTime: startTime,
-                                    endTime: finishTime
+                                    endTime: adjustedFinishTime
                                 });
                                 
-                                console.log(`  ${dateInfo.dayName}: ${startTime.hour}:${startTime.minute.toString().padStart(2,'0')} - ${finishTime.hour}:${finishTime.minute.toString().padStart(2,'0')}`);
+                                console.log(`  ${dateInfo.dayName}: ${startTime.hour}:${startTime.minute.toString().padStart(2,'0')} - ${adjustedFinishTime.hour}:${adjustedFinishTime.minute.toString().padStart(2,'0')}`);
                             }
                         }
                     });
@@ -354,9 +357,38 @@
                 const month = parseInt(date.substring(4, 6)) - 1;
                 const day = parseInt(date.substring(6, 8));
                 
+                // Handle times that cross midnight (hour >= 24)
+                let actualHour = time.hour;
+                let daysToAdd = 0;
+                
+                if (actualHour >= 24) {
+                    daysToAdd = Math.floor(actualHour / 24);
+                    actualHour = actualHour % 24;
+                }
+                
                 // Create UTC date directly (which is GMT)
-                const gmtDate = new Date(Date.UTC(year, month, day, time.hour, time.minute, 0, 0));
+                const gmtDate = new Date(Date.UTC(year, month, day, actualHour, time.minute, 0, 0));
+                
+                // Add extra days if shift crossed midnight
+                if (daysToAdd > 0) {
+                    gmtDate.setUTCDate(gmtDate.getUTCDate() + daysToAdd);
+                }
+                
                 return gmtDate.toISOString();
+            }
+
+            // Check if a shift crosses midnight and adjust end time accordingly
+            adjustForMidnightCrossing(startTime, endTime) {
+                // If end time is less than start time, the shift crosses midnight
+                // Add 24 hours (1 day) to the end time
+                if (endTime.hour < startTime.hour || 
+                    (endTime.hour === startTime.hour && endTime.minute < startTime.minute)) {
+                    return {
+                        hour: endTime.hour + 24,
+                        minute: endTime.minute
+                    };
+                }
+                return endTime;
             }
 
             findEmployeeByName(name) {
