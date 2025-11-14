@@ -288,7 +288,11 @@
         <div class="card specs">
             <h2>📋 Processing Specifications</h2>
             <ul>
-                <li><strong>Store ID:</strong> Takes last 6 characters, removes "/", pads with leading "0"</li>
+                <li><strong>Column A:</strong> User ID (last 4 digits → timeCardId)</li>
+                <li><strong>Column B:</strong> First Name (converted to uppercase)</li>
+                <li><strong>Column C:</strong> Last Name (converted to uppercase)</li>
+                <li><strong>Column D:</strong> Job Role (mapped to jobCode)</li>
+                <li><strong>Column E:</strong> Store ID (copied directly to output)</li>
                 <li><strong>Job Codes:</strong> 
                     <ul style="margin-top: 8px;">
                         <li>RGM → "15008"</li>
@@ -300,10 +304,8 @@
                         <li>All Others → "9011"</li>
                     </ul>
                 </li>
-                <li><strong>Time Card ID:</strong> Last 4 digits of User ID</li>
-                <li><strong>Names:</strong> Converted to uppercase</li>
-                <li><strong>Required Columns:</strong> USERID, FIRSTNAME, LASTNAME, STOREID, JOBROLE</li>
                 <li><strong>Output Format:</strong> JSON with store, date, created timestamp, and employees array</li>
+                <li><strong>Output Filename:</strong> employees_active_filtered_[storeID].json</li>
             </ul>
         </div>
     </div>
@@ -316,7 +318,6 @@
         let fileData = null;
         let processedResult = null;
 
-        // Function to generate UUID v4
         function generateUUID() {
             return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
                 const r = Math.random() * 16 | 0;
@@ -325,25 +326,6 @@
             });
         }
 
-        // Function to process store ID according to specifications
-        function processStoreId(storeId) {
-            if (!storeId) return '';
-            
-            // Take last 6 characters (format: <nnn/nn>)
-            const last6 = storeId.slice(-6);
-            
-            // Strip out the "/"
-            const withoutSlash = last6.replace('/', '');
-            
-            // Pad the first digit with "0" if needed to make it 6 digits
-            if (withoutSlash.length === 5) {
-                return '0' + withoutSlash;
-            }
-            
-            return withoutSlash;
-        }
-
-        // Function to get job code based on job role
         function getJobCode(jobRole) {
             if (!jobRole) return "9011";
             
@@ -367,13 +349,12 @@
             }
         }
 
-        // Function to get last 4 digits of User ID for timeCardId
         function getTimeCardId(userId) {
             if (!userId) return '';
-            return userId.slice(-4);
+            const userIdStr = userId.toString();
+            return userIdStr.slice(-4);
         }
 
-        // File upload handling
         const uploadArea = document.getElementById('uploadArea');
         const fileInput = document.getElementById('fileInput');
         const fileInfo = document.getElementById('fileInfo');
@@ -442,7 +423,6 @@
                 showStatus('⚡ Processing file...', 'info');
                 processBtn.disabled = true;
 
-                // Read the Excel file
                 const workbook = XLSX.read(fileData, {
                     cellStyles: true,
                     cellFormulas: true,
@@ -451,44 +431,33 @@
                     sheetStubs: true
                 });
 
-                // Get the first sheet
                 const sheetName = workbook.SheetNames[0];
                 const worksheet = workbook.Sheets[sheetName];
-
-                // Convert to JSON array
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
                 if (jsonData.length < 2) {
                     throw new Error('Spreadsheet must contain at least a header row and one data row');
                 }
 
-                // Get headers and find required column indices
-                const headers = jsonData[0];
-                const userIdIndex = headers.findIndex(h => h === 'USERID');
-                const firstNameIndex = headers.findIndex(h => h === 'FIRSTNAME');
-                const lastNameIndex = headers.findIndex(h => h === 'LASTNAME');
-                const storeIdIndex = headers.findIndex(h => h === 'STOREID');
-                const jobRoleIndex = headers.findIndex(h => h === 'JOBROLE');
+                const userIdIndex = 0;
+                const firstNameIndex = 1;
+                const lastNameIndex = 2;
+                const jobRoleIndex = 3;
+                const storeIdIndex = 4;
 
-                // Validate that all required columns exist
-                if (userIdIndex === -1) throw new Error('USERID column not found');
-                if (firstNameIndex === -1) throw new Error('FIRSTNAME column not found');
-                if (lastNameIndex === -1) throw new Error('LASTNAME column not found');
-                if (storeIdIndex === -1) throw new Error('STOREID column not found');
-                if (jobRoleIndex === -1) throw new Error('JOBROLE column not found');
-
-                // Get store ID from first data row
-                let storeValue = '';
-                if (jsonData.length > 1 && storeIdIndex >= 0) {
-                    storeValue = processStoreId(jsonData[1][storeIdIndex]);
+                if (jsonData[0].length < 5) {
+                    throw new Error('Spreadsheet must have at least 5 columns: User ID, First Name, Last Name, Job Role, Store ID');
                 }
 
-                // Process each employee row (skip header)
+                let storeValue = '';
+                if (jsonData.length > 1 && jsonData[1][storeIdIndex]) {
+                    storeValue = jsonData[1][storeIdIndex].toString();
+                }
+
                 const employees = [];
                 for (let i = 1; i < jsonData.length; i++) {
                     const row = jsonData[i];
 
-                    // Skip empty rows or rows without a user ID
                     if (!row || row.length === 0 || !row[userIdIndex]) {
                         continue;
                     }
@@ -500,14 +469,13 @@
                             jobCode: getJobCode(row[jobRoleIndex])
                         },
                         id: generateUUID(),
-                        lastName: (row[lastNameIndex] || '').toUpperCase(),
-                        firstName: (row[firstNameIndex] || '').toUpperCase()
+                        lastName: (row[lastNameIndex] || '').toString().toUpperCase(),
+                        firstName: (row[firstNameIndex] || '').toString().toUpperCase()
                     };
 
                     employees.push(employee);
                 }
 
-                // Create the final JSON structure
                 const now = new Date();
                 const dateString = now.getFullYear() + 
                                   String(now.getMonth() + 1).padStart(2, '0') + 
@@ -520,11 +488,9 @@
                     employees: employees
                 };
 
-                // Show success and preview
                 showStatus(`🎉 Processing complete! Converted ${employees.length} employees. Store ID: ${storeValue}`, 'success');
                 downloadBtn.style.display = 'inline-block';
                 
-                // Show preview
                 preview.style.display = 'block';
                 jsonPreview.textContent = JSON.stringify(processedResult, null, 2);
 
@@ -545,7 +511,6 @@
             const blob = new Blob([jsonString], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
             
-            // Create filename with store value
             const storeValue = processedResult.store || '000000';
             const filename = `employees_active_filtered_${storeValue}.json`;
             
