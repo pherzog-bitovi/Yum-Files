@@ -37,16 +37,12 @@
             text-align: center;
             transition: border-color 0.3s;
         }
-        .upload-box:hover {
-            border-color: #007bff;
-        }
+        .upload-box:hover { border-color: #007bff; }
         .upload-box.dragover {
             border-color: #007bff;
             background-color: #f0f8ff;
         }
-        input[type="file"] {
-            margin: 10px 0;
-        }
+        input[type="file"] { margin: 10px 0; }
         button {
             background-color: #007bff;
             color: white;
@@ -57,37 +53,18 @@
             font-size: 16px;
             margin: 10px 5px;
         }
-        button:hover {
-            background-color: #0056b3;
-        }
-        button:disabled {
-            background-color: #6c757d;
-            cursor: not-allowed;
-        }
+        button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #6c757d; cursor: not-allowed; }
         .status {
             margin: 20px 0;
             padding: 15px;
             border-radius: 6px;
             font-weight: bold;
         }
-        .status.success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .status.error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .status.info {
-            background-color: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
-        }
-        .output-section {
-            margin-top: 30px;
-        }
+        .status.success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .status.error   { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .status.info    { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .output-section { margin-top: 30px; }
         .json-output {
             background-color: #f8f9fa;
             border: 1px solid #dee2e6;
@@ -106,10 +83,7 @@
             margin: 10px 0;
             font-size: 14px;
         }
-        .controls {
-            text-align: center;
-            margin: 20px 0;
-        }
+        .controls { text-align: center; margin: 20px 0; }
         .features-note {
             background-color: #e7f3ff;
             color: #0c5460;
@@ -118,20 +92,14 @@
             margin: 20px 0;
             border: 1px solid #bee5eb;
         }
-        .features-note h4 {
-            margin-top: 0;
-            color: #0c5460;
-        }
-        .features-list {
-            margin: 5px 0;
-            padding-left: 20px;
-        }
+        .features-note h4 { margin-top: 0; color: #0c5460; }
+        .features-list { margin: 5px 0; padding-left: 20px; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Labor Schedule Processor - Final Version</h1>
-        
+
         <div class="features-note">
             <h4>🎯 Latest Features:</h4>
             <ul class="features-list">
@@ -140,9 +108,10 @@
                 <li><strong>Date Correction:</strong> Fixed offset to start from correct Monday date</li>
                 <li><strong>Boolean Fields:</strong> 'borrowed' field uses boolean false</li>
                 <li><strong>String Job Codes:</strong> Job codes stored as strings</li>
+                <li><strong>Correct Structure:</strong> Labor entries output as array inside <code>labor[0].schedules</code></li>
             </ul>
         </div>
-        
+
         <div class="upload-section">
             <div class="upload-box" id="employeeUpload">
                 <h3>Employee JSON File</h3>
@@ -150,7 +119,6 @@
                 <input type="file" id="employeeFile" accept=".json" />
                 <div class="file-info" id="employeeInfo" style="display: none;"></div>
             </div>
-            
             <div class="upload-box" id="scheduleUpload">
                 <h3>Labor Schedule Spreadsheet</h3>
                 <p>Upload your Excel file with daily start/end times</p>
@@ -191,21 +159,14 @@
 
             loadEmployeeData(data, fileName) {
                 try {
-                    // Handle the actual JSON structure from the sample file
                     if (data.employees) {
                         this.employees = data.employees;
                         this.store = data.store;
                     } else {
                         this.employees = data;
-                        // Extract store number from filename (last 6 digits)
                         const storeMatch = fileName.match(/(\d{6})/);
-                        if (storeMatch) {
-                            this.store = storeMatch[1];
-                        } else {
-                            this.store = '999999';
-                        }
+                        this.store = storeMatch ? storeMatch[1] : '999999';
                     }
-                    
                     return true;
                 } catch (error) {
                     console.error('Error processing employee data:', error);
@@ -215,72 +176,41 @@
 
             loadScheduleData(workbook) {
                 try {
-                    // For the simpler format, look for date-named sheets first
-                    let targetSheet = null;
-                    
-                    // Find sheets that match date patterns (like "22.06.25" or "24.08.25")
-                    const dateSheets = workbook.SheetNames.filter(name => name.match(/\d{2}\.\d{2}\.\d{2}/));
-                    
-                    if (dateSheets.length > 0) {
-                        targetSheet = dateSheets[0];
-                    } else {
-                        targetSheet = workbook.SheetNames[0];
-                    }
-                    
+                    const dateSheets = workbook.SheetNames.filter(n => n.match(/\d{2}\.\d{2}\.\d{2}/));
+                    const targetSheet = dateSheets.length > 0 ? dateSheets[0] : workbook.SheetNames[0];
                     console.log(`Using sheet: ${targetSheet}`);
-                    
+
                     const worksheet = workbook.Sheets[targetSheet];
                     const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-                    
-                    // Extract dates from row 0 and adjust them to match the intended schedule
                     const dateRow = jsonData[0];
                     const allDates = [];
-                    
-                    // First, extract all available dates from the Excel file
+
                     for (let i = 0; i < dateRow.length; i++) {
                         if (dateRow[i] && typeof dateRow[i] === 'number' && dateRow[i] > 40000) {
                             const excelDate = new Date((dateRow[i] - 25569) * 86400 * 1000);
-                            
-                            // Adjust the date by adding 1 day to match the intended schedule
-                            // This corrects for the Excel date offset
                             const correctedDate = new Date(excelDate);
                             correctedDate.setDate(excelDate.getDate() + 1);
-                            
                             allDates.push({
                                 column: i,
                                 date: correctedDate,
-                                dayName: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][correctedDate.getDay()],
+                                dayName: ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][correctedDate.getDay()],
                                 dateString: this.formatDateYYYYMMDD(correctedDate)
                             });
                         }
                     }
-                    
-                    // Find Wednesday to use as the schedule date
+
                     const wednesday = allDates.find(d => d.dayName === 'Wednesday');
-                    let scheduleDate;
-                    
                     if (wednesday) {
-                        scheduleDate = wednesday.dateString;
-                        this.scheduleDate = scheduleDate;
-                        
-                        // Include ALL 7 days from the Excel file
-                        // The schedule runs Monday to Sunday (7 days total)
-                        this.scheduleData = this.parseScheduleData(jsonData, allDates);
+                        this.scheduleDate = wednesday.dateString;
+                    } else if (allDates.length > 0) {
+                        const t = new Date(allDates[0].date);
+                        t.setDate(t.getDate() + 2);
+                        this.scheduleDate = this.formatDateYYYYMMDD(t);
                     } else {
-                        // Fallback: use all dates and set schedule date as first date + 2
-                        if (allDates.length > 0) {
-                            const firstDate = allDates[0].date;
-                            const targetDate = new Date(firstDate);
-                            targetDate.setDate(firstDate.getDate() + 2);
-                            scheduleDate = this.formatDateYYYYMMDD(targetDate);
-                        } else {
-                            scheduleDate = this.formatDateYYYYMMDD(new Date());
-                        }
-                        
-                        this.scheduleDate = scheduleDate;
-                        this.scheduleData = this.parseScheduleData(jsonData, allDates);
+                        this.scheduleDate = this.formatDateYYYYMMDD(new Date());
                     }
-                    
+
+                    this.scheduleData = this.parseScheduleData(jsonData, allDates);
                     return true;
                 } catch (error) {
                     console.error('Error processing schedule data:', error);
@@ -289,61 +219,41 @@
             }
 
             parseScheduleData(rawData, dates) {
-                const scheduleData = {
-                    dates: dates,
-                    shifts: []
-                };
-
+                const scheduleData = { dates, shifts: [] };
                 if (rawData.length < 4) return scheduleData;
 
-                console.log(`Processing ${rawData.length - 3} potential employees...`);
-
-                // Parse employee schedules starting from row 3
                 for (let row = 3; row < rawData.length; row++) {
                     const rowData = rawData[row];
                     if (!rowData[0] || !rowData[0].toString().trim()) continue;
-                    
+
                     const employeeName = rowData[0].toString().trim();
                     const employee = this.findEmployeeByName(employeeName);
-                    
                     if (!employee) {
-                        console.warn(`Employee not found in JSON: ${employeeName}`);
+                        console.warn(`Employee not found: ${employeeName}`);
                         continue;
                     }
 
-                    console.log(`Processing ${employeeName}...`);
-
-                    // Parse shifts for each day
                     dates.forEach((dateInfo, dayIndex) => {
                         const startCol = 1 + (dayIndex * 3);
                         const finishCol = startCol + 1;
-                        
                         if (startCol < rowData.length && finishCol < rowData.length) {
                             const startTime = this.decimalToTime(rowData[startCol]);
                             const finishTime = this.decimalToTime(rowData[finishCol]);
-                            
                             if (startTime && finishTime) {
-                                // Adjust finish time if shift crosses midnight
-                                const adjustedFinishTime = this.adjustForMidnightCrossing(startTime, finishTime);
-                                
                                 scheduleData.shifts.push({
-                                    employee: employee,
+                                    employee,
                                     date: dateInfo.dateString,
-                                    startTime: startTime,
-                                    endTime: adjustedFinishTime
+                                    startTime,
+                                    endTime: this.adjustForMidnightCrossing(startTime, finishTime)
                                 });
-                                
-                                console.log(`  ${dateInfo.dayName}: ${startTime.hour}:${startTime.minute.toString().padStart(2,'0')} - ${adjustedFinishTime.hour}:${adjustedFinishTime.minute.toString().padStart(2,'0')}`);
                             }
                         }
                     });
                 }
 
-                console.log(`Total shifts processed: ${scheduleData.shifts.length}`);
                 return scheduleData;
             }
 
-            // Convert Excel decimal time to time object
             decimalToTime(decimal) {
                 if (!decimal || decimal === 0) return null;
                 const hours = Math.floor(decimal * 24);
@@ -351,264 +261,168 @@
                 return { hour: hours, minute: minutes };
             }
 
-            // Convert time to GMT datetime string
             timeToGMT(date, time) {
-                const year = parseInt(date.substring(0, 4));
+                const year  = parseInt(date.substring(0, 4));
                 const month = parseInt(date.substring(4, 6)) - 1;
-                const day = parseInt(date.substring(6, 8));
-                
-                // Handle times that cross midnight (hour >= 24)
+                const day   = parseInt(date.substring(6, 8));
                 let actualHour = time.hour;
                 let daysToAdd = 0;
-                
                 if (actualHour >= 24) {
                     daysToAdd = Math.floor(actualHour / 24);
                     actualHour = actualHour % 24;
                 }
-                
-                // Create UTC date directly (which is GMT)
                 const gmtDate = new Date(Date.UTC(year, month, day, actualHour, time.minute, 0, 0));
-                
-                // Add extra days if shift crossed midnight
-                if (daysToAdd > 0) {
-                    gmtDate.setUTCDate(gmtDate.getUTCDate() + daysToAdd);
-                }
-                
+                if (daysToAdd > 0) gmtDate.setUTCDate(gmtDate.getUTCDate() + daysToAdd);
                 return gmtDate.toISOString();
             }
 
-            // Check if a shift crosses midnight and adjust end time accordingly
             adjustForMidnightCrossing(startTime, endTime) {
-                // If end time is less than start time, the shift crosses midnight
-                // Add 24 hours (1 day) to the end time
-                if (endTime.hour < startTime.hour || 
+                if (endTime.hour < startTime.hour ||
                     (endTime.hour === startTime.hour && endTime.minute < startTime.minute)) {
-                    return {
-                        hour: endTime.hour + 24,
-                        minute: endTime.minute
-                    };
+                    return { hour: endTime.hour + 24, minute: endTime.minute };
                 }
                 return endTime;
             }
 
             findEmployeeByName(name) {
-                const nameParts = name.split(/\s+/);
-                if (nameParts.length < 2) return null;
-                
-                const firstName = nameParts[0].toLowerCase();
-                const lastName = nameParts[nameParts.length - 1].toLowerCase();
-                
-                // First try exact match
-                let employee = this.employees.find(emp => 
-                    emp.firstName && emp.lastName &&
-                    emp.firstName.toLowerCase() === firstName &&
-                    emp.lastName.toLowerCase() === lastName
-                );
-                
-                // If not found, try reversed (last name first)
-                if (!employee && nameParts.length >= 2) {
-                    const firstNameAlt = nameParts[nameParts.length - 1].toLowerCase();
-                    const lastNameAlt = nameParts[0].toLowerCase();
-                    
-                    employee = this.employees.find(emp => 
-                        emp.firstName && emp.lastName &&
-                        emp.firstName.toLowerCase() === firstNameAlt &&
-                        emp.lastName.toLowerCase() === lastNameAlt
-                    );
-                }
-                
-                // If still not found, try partial matching
-                if (!employee) {
-                    employee = this.employees.find(emp => 
-                        emp.firstName && emp.lastName &&
-                        (emp.firstName.toLowerCase().includes(firstName) || firstName.includes(emp.firstName.toLowerCase())) &&
-                        (emp.lastName.toLowerCase().includes(lastName) || lastName.includes(emp.lastName.toLowerCase()))
-                    );
-                }
-                
-                return employee;
+                const parts = name.split(/\s+/);
+                if (parts.length < 2) return null;
+                const first = parts[0].toLowerCase();
+                const last  = parts[parts.length - 1].toLowerCase();
+
+                return this.employees.find(e =>
+                    e.firstName && e.lastName && (
+                        (e.firstName.toLowerCase() === first && e.lastName.toLowerCase() === last) ||
+                        (e.firstName.toLowerCase() === last  && e.lastName.toLowerCase() === first) ||
+                        (e.firstName.toLowerCase().includes(first) && e.lastName.toLowerCase().includes(last))
+                    )
+                ) || null;
             }
 
             generateOutput() {
-                const output = {
-                    store: this.store,
-                    date: this.scheduleDate,
-                    created: new Date().toISOString(),
-                    labor: [
-                        {
-                        type: "WEEKLY",
-                        schedules: []
-                        }
-                    ],
-                    employees: []
-                };
+                // Build the schedules array that sits inside labor[0]
+                const schedules = [];
 
-                // Generate labor schedules
                 this.scheduleData.shifts.forEach(shift => {
-                    const employee = shift.employee;
-                    const jobCode = employee.job ? employee.job.jobCode : employee.jobCode;
+                    const emp = shift.employee;
+                    const jobCode   = emp.job ? emp.job.jobCode : emp.jobCode;
                     const breakType = parseInt(jobCode) === 15008 ? "N" : "Y";
-                    const startGMT = this.timeToGMT(shift.date, shift.startTime);
-                    const endGMT = this.timeToGMT(shift.date, shift.endTime);
-                    const hours = this.calculateHours(startGMT, endGMT, breakType === "Y");
-                    const shiftNumber = shift.startTime.hour < 12 ? 1 : 2;
+                    const inGMT     = this.timeToGMT(shift.date, shift.startTime);
+                    const outGMT    = this.timeToGMT(shift.date, shift.endTime);
+                    const hours     = this.calculateHours(inGMT, outGMT, breakType === "Y");
 
-                    output.labor.schedules.push({
-                        breakType: breakType,
-                        in: startGMT,
-                        out: endGMT,
-                        borrowed: false,
-                        date: shift.date,
-                        hours: hours,
-                        employeeId: employee.id,
-                        jobCode: jobCode.toString(),
-                        jobTitle: this.getJobTitle(parseInt(jobCode)),
-                        shiftNumber: shiftNumber
+                    schedules.push({
+                        breakType,
+                        in:          inGMT,
+                        out:         outGMT,
+                        borrowed:    false,
+                        date:        shift.date,
+                        hours,
+                        employeeId:  emp.id,
+                        jobCode:     jobCode.toString(),
+                        jobTitle:    this.getJobTitle(parseInt(jobCode)),
+                        shiftNumber: shift.startTime.hour < 12 ? 1 : 2
                     });
                 });
 
-                // Generate employee list
-                const employeesWithShifts = new Set();
-                this.scheduleData.shifts.forEach(shift => {
-                    employeesWithShifts.add(shift.employee.id);
-                });
+                // Collect employees that have at least one shift
+                const usedIds = new Set(this.scheduleData.shifts.map(s => s.employee.id));
+                const employees = this.employees
+                    .filter(e => usedIds.has(e.id))
+                    .map(({ id, lastName, firstName, timeCardId }) => ({ id, lastName, firstName, timeCardId }));
 
-                this.employees.forEach(employee => {
-                    if (employeesWithShifts.has(employee.id)) {
-                        output.employees.push({
-                            id: employee.id,
-                            lastName: employee.lastName,
-                            firstName: employee.firstName,
-                            timeCardId: employee.timeCardId
-                        });
-                    }
-                });
-
-                return output;
+                return {
+                    store:     this.store,
+                    date:      this.scheduleDate,
+                    created:   new Date().toISOString(),
+                    labor: [
+                        {
+                            type:      "WEEKLY",
+                            schedules          // ← array of schedule objects
+                        }
+                    ],
+                    employees
+                };
             }
 
             calculateHours(startTime, endTime, hasBreak) {
-                const start = new Date(startTime);
-                const end = new Date(endTime);
-                let hours = (end - start) / (1000 * 60 * 60);
-                
-                if (hasBreak) {
-                    hours -= 0.5;
-                }
-                
-                return Math.round(hours * 100) / 100;
+                const diff = (new Date(endTime) - new Date(startTime)) / 3600000;
+                return Math.round((hasBreak ? diff - 0.5 : diff) * 100) / 100;
             }
 
             getJobTitle(jobCode) {
-                switch (parseInt(jobCode)) {
-                    case 15008: return 'RGM';
-                    case 9051: return 'SL';
-                    case 9902: return 'AM';
-                    case 9011: return 'FC';
-                    default: return 'FC';
-                }
+                const map = { 15008: 'RGM', 9051: 'SL', 9902: 'AM', 9011: 'FC' };
+                return map[jobCode] || 'FC';
             }
 
             formatDateYYYYMMDD(date) {
-                const year = date.getFullYear();
-                const month = String(date.getMonth() + 1).padStart(2, '0');
-                const day = String(date.getDate()).padStart(2, '0');
-                return `${year}${month}${day}`;
+                const y = date.getFullYear();
+                const m = String(date.getMonth() + 1).padStart(2, '0');
+                const d = String(date.getDate()).padStart(2, '0');
+                return `${y}${m}${d}`;
             }
         }
 
-        // File upload handlers
+        // ── File upload handlers ──────────────────────────────────────────────
         document.getElementById('employeeFile').addEventListener('change', function(e) {
             const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const jsonData = JSON.parse(e.target.result);
-                        employeeData = {
-                            data: jsonData,
-                            fileName: file.name
-                        };
-                        
-                        const empCount = jsonData.employees ? jsonData.employees.length : jsonData.length;
-                        document.getElementById('employeeInfo').innerHTML = `✓ Loaded: ${file.name} (${empCount} employees)`;
-                        document.getElementById('employeeInfo').style.display = 'block';
-                        checkProcessReady();
-                    } catch (error) {
-                        showStatus('Error parsing employee JSON file: ' + error.message, 'error');
-                    }
-                };
-                reader.readAsText(file);
-            }
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    employeeData = { data: jsonData, fileName: file.name };
+                    const cnt = jsonData.employees ? jsonData.employees.length : jsonData.length;
+                    document.getElementById('employeeInfo').innerHTML = `✓ Loaded: ${file.name} (${cnt} employees)`;
+                    document.getElementById('employeeInfo').style.display = 'block';
+                    checkProcessReady();
+                } catch (err) {
+                    showStatus('Error parsing employee JSON: ' + err.message, 'error');
+                }
+            };
+            reader.readAsText(file);
         });
 
         document.getElementById('scheduleFile').addEventListener('change', function(e) {
             const file = e.target.files[0];
-            if (file) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    try {
-                        const data = new Uint8Array(e.target.result);
-                        const workbook = XLSX.read(data, { type: 'array' });
-                        scheduleData = {
-                            workbook: workbook,
-                            fileName: file.name
-                        };
-                        document.getElementById('scheduleInfo').innerHTML = `✓ Loaded: ${file.name}`;
-                        document.getElementById('scheduleInfo').style.display = 'block';
-                        checkProcessReady();
-                    } catch (error) {
-                        showStatus('Error parsing schedule file: ' + error.message, 'error');
-                    }
-                };
-                reader.readAsArrayBuffer(file);
-            }
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    scheduleData = { workbook: wb, fileName: file.name };
+                    document.getElementById('scheduleInfo').innerHTML = `✓ Loaded: ${file.name}`;
+                    document.getElementById('scheduleInfo').style.display = 'block';
+                    checkProcessReady();
+                } catch (err) {
+                    showStatus('Error parsing schedule file: ' + err.message, 'error');
+                }
+            };
+            reader.readAsArrayBuffer(file);
         });
 
         function checkProcessReady() {
-            const processBtn = document.getElementById('processBtn');
-            if (employeeData && scheduleData) {
-                processBtn.disabled = false;
-            }
+            document.getElementById('processBtn').disabled = !(employeeData && scheduleData);
         }
 
         function loadSampleData() {
             showStatus('Loading sample data...', 'info');
-            
-            try {
-                if (window.fs) {
-                    window.fs.readFile('employees_active_filtered_093004.json', { encoding: 'utf8' })
-                        .then(data => {
-                            employeeData = {
-                                data: JSON.parse(data),
-                                fileName: 'employees_active_filtered_093004.json'
-                            };
-                            document.getElementById('employeeInfo').innerHTML = `✓ Loaded sample: employees_active_filtered_093004.json (${employeeData.data.employees.length} employees)`;
-                            document.getElementById('employeeInfo').style.display = 'block';
-                            
-                            return window.fs.readFile('Labour Sheet  Ashton Moss 091425.xlsx');
-                        })
-                        .then(data => {
-                            const workbook = XLSX.read(data, { type: 'array' });
-                            scheduleData = {
-                                workbook: workbook,
-                                fileName: 'Labour Sheet  Ashton Moss 091425.xlsx'
-                            };
-                            document.getElementById('scheduleInfo').innerHTML = `✓ Loaded sample: Labour Sheet  Ashton Moss 091425.xlsx`;
-                            document.getElementById('scheduleInfo').style.display = 'block';
-                            
-                            checkProcessReady();
-                            showStatus('✅ Sample data loaded successfully! Click "Process Files" to test.', 'success');
-                        })
-                        .catch(error => {
-                            showStatus('Sample files not found. Please upload your own files.', 'error');
-                        });
-                } else {
-                    showStatus('File system not available. Please upload files manually.', 'error');
-                }
-            } catch (error) {
-                showStatus('Error loading sample data: ' + error.message, 'error');
-            }
+            if (!window.fs) { showStatus('File system not available. Please upload files manually.', 'error'); return; }
+            window.fs.readFile('employees_active_filtered_093004.json', { encoding: 'utf8' })
+                .then(data => {
+                    employeeData = { data: JSON.parse(data), fileName: 'employees_active_filtered_093004.json' };
+                    document.getElementById('employeeInfo').innerHTML = `✓ Sample loaded (${employeeData.data.employees.length} employees)`;
+                    document.getElementById('employeeInfo').style.display = 'block';
+                    return window.fs.readFile('Labour Sheet  Ashton Moss 091425.xlsx');
+                })
+                .then(data => {
+                    scheduleData = { workbook: XLSX.read(data, { type: 'array' }), fileName: 'Labour Sheet  Ashton Moss 091425.xlsx' };
+                    document.getElementById('scheduleInfo').innerHTML = `✓ Sample schedule loaded`;
+                    document.getElementById('scheduleInfo').style.display = 'block';
+                    checkProcessReady();
+                    showStatus('✅ Sample data loaded! Click "Process Files" to test.', 'success');
+                })
+                .catch(() => showStatus('Sample files not found. Please upload your own files.', 'error'));
         }
 
         function processFiles() {
@@ -616,82 +430,56 @@
                 showStatus('Please upload both files before processing.', 'error');
                 return;
             }
-
             showStatus('Processing files...', 'info');
-
             const processor = new LaborScheduleProcessor();
-            
             try {
-                // Load employee data
-                if (!processor.loadEmployeeData(employeeData.data, employeeData.fileName)) {
+                if (!processor.loadEmployeeData(employeeData.data, employeeData.fileName))
                     throw new Error('Failed to process employee data');
-                }
-
-                // Load schedule data
-                if (!processor.loadScheduleData(scheduleData.workbook)) {
+                if (!processor.loadScheduleData(scheduleData.workbook))
                     throw new Error('Failed to process schedule data');
-                }
 
-                // Generate output
                 processedOutput = processor.generateOutput();
-                
-                // Display result
                 document.getElementById('jsonOutput').textContent = JSON.stringify(processedOutput, null, 2);
                 document.getElementById('downloadSection').style.display = 'block';
-                
-                // Count unique days in the output
-                const uniqueDays = new Set(processedOutput.labor.schedules.map(s => s.date));
-                
-                showStatus(`✅ Successfully processed ${processedOutput.labor.schedules.length} labor entries across ${uniqueDays.size} days for ${processedOutput.employees.length} employees. All times in GMT timezone.`, 'success');
-                
-            } catch (error) {
-                showStatus('Processing failed: ' + error.message, 'error');
-                console.error('Processing error:', error);
+
+                const days = new Set(processedOutput.labor[0].schedules.map(s => s.date)).size;
+                const entries = processedOutput.labor[0].schedules.length;
+                showStatus(`✅ Processed ${entries} labor entries across ${days} days for ${processedOutput.employees.length} employees.`, 'success');
+            } catch (err) {
+                showStatus('Processing failed: ' + err.message, 'error');
+                console.error(err);
             }
         }
 
         function downloadJSON() {
-            if (!processedOutput) {
-                showStatus('No output to download. Process files first.', 'error');
-                return;
-            }
-
-            const fileName = `laborschedule_filtered_${processedOutput.store}_${processedOutput.date}.json`;
+            if (!processedOutput) { showStatus('No output to download.', 'error'); return; }
+            const name = `laborschedule_filtered_${processedOutput.store}_${processedOutput.date}.json`;
             const blob = new Blob([JSON.stringify(processedOutput, null, 2)], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = fileName;
+            const url  = URL.createObjectURL(blob);
+            const a    = Object.assign(document.createElement('a'), { href: url, download: name });
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-            
-            showStatus(`Downloaded: ${fileName}`, 'success');
+            showStatus(`Downloaded: ${name}`, 'success');
         }
 
         function clearAll() {
-            employeeData = null;
-            scheduleData = null;
-            processedOutput = null;
-            
-            document.getElementById('employeeFile').value = '';
-            document.getElementById('scheduleFile').value = '';
-            document.getElementById('employeeInfo').style.display = 'none';
-            document.getElementById('scheduleInfo').style.display = 'none';
+            employeeData = scheduleData = processedOutput = null;
+            ['employeeFile','scheduleFile'].forEach(id => document.getElementById(id).value = '');
+            ['employeeInfo','scheduleInfo','status','downloadSection'].forEach(id =>
+                document.getElementById(id).style.display = 'none');
             document.getElementById('processBtn').disabled = true;
             document.getElementById('jsonOutput').textContent = 'No output yet. Upload files and click "Process Files" to see results.';
-            document.getElementById('downloadSection').style.display = 'none';
-            document.getElementById('status').style.display = 'none';
         }
 
-        function showStatus(message, type) {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = message;
-            statusDiv.className = `status ${type}`;
-            statusDiv.style.display = 'block';
+        function showStatus(msg, type) {
+            const el = document.getElementById('status');
+            el.textContent = msg;
+            el.className = `status ${type}`;
+            el.style.display = 'block';
         }
     </script>
 </body>
 </html>
+
